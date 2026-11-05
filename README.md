@@ -1,28 +1,78 @@
-# SUPER RECOVERY AutoScan — Windows local recovery agent
+# SUPER RECOVERY — Windows Local Forensic Recovery Station
 
-Not an upload-only website. A local Python agent inventories physical disks and calls The Sleuth Kit (TSK) tools: `mmls`, `fls`, `icat`, `fsstat`.
+SUPER RECOVERY is a local-first Windows forensic recovery interface. The GitHub Pages copy is only a static landing/interface; it cannot inspect the computer's disks. **Run the Windows local agent and use `http://127.0.0.1:8765` for actual device detection, scanning and recovery.**
 
-## Requirements
-- Windows 10/11, Python 3.10+
-- Install trusted Windows binaries for The Sleuth Kit and add its `bin` folder to PATH. Verify `mmls -V`, `fls -V`, `icat -V`, `fsstat -V`.
-- Run elevated as Administrator for raw physical disk access.
+## 1. Requirements
 
-## Run
-1. Extract ZIP; install Python and TSK.
-2. Connect the target storage device.
-3. Run `Start-Super-Recovery-as-Admin.bat`.
-4. Open `http://127.0.0.1:8765`.
-5. Select a non-system disk. Click Find partitions, select a partition start sector, then Start deleted-file scan.
-6. Select deleted entries and recover to an existing folder on a different healthy drive.
+- Windows 10 or Windows 11
+- Python 3.10 or newer
+- The Sleuth Kit (TSK) Windows build installed from a trusted source
+- TSK `bin` folder added to the Windows PATH; the required commands are `mmls`, `fls`, `icat`, and `fsstat`
+- Administrator permissions for raw physical disk access
 
-## GitHub Pages limitation
-GitHub Pages cannot access physical disk sectors. The actual recovery engine runs locally using `server.py`; this agent serves the UI on localhost to avoid exposing a local API to arbitrary websites. Static files can still be uploaded to GitHub as a product front end, but physical recovery requires the local agent.
+Verify in PowerShell:
 
-## Safety and limitations
-Source access is read-only; extracted files are written to the destination. System/boot disks are blocked. This is an initial TSK integration, not a complete Autopsy replacement. Recovery depends on intact filesystem metadata and TSK filesystem support. It cannot guarantee recovery of overwritten data, SSD TRIMmed blocks, fragmented files, encrypted volumes or physically damaged media. Image failing drives before repeated scans; stop if clicking/disconnecting. Keep the agent bound to 127.0.0.1; do not expose it publicly.
+```powershell
+mmls -V
+fls -V
+icat -V
+fsstat -V
+```
+
+If a command is not found, install TSK and add its `bin` directory to PATH, then close and reopen the terminal.
+
+## 2. Start the actual local recovery station
+
+1. Extract the entire ZIP to a normal folder (not inside the ZIP viewer).
+2. Connect the USB drive, external HDD, memory card reader or other target storage.
+3. Double-click `Start-Super-Recovery-as-Admin.bat` and approve the Windows UAC prompt.
+4. Keep the black command window open.
+5. The app opens at `http://127.0.0.1:8765`.
+6. Click **ENABLE SOUND & START** once. The bulldog sniffs for ten seconds, plays three real bark clips, then reveals the developer credit. The browser requires this first click to grant audio permission; browsers do not allow a website to force autoplay with sound before user interaction.
+7. The local agent checks for connected disks every five seconds. Connect or disconnect storage and the list updates automatically.
+8. Select the target disk. AutoSearch reads the partition map and scans each detected partition for deleted directory entries using TSK `fls`.
+9. Select recoverable entries and recover them to a folder on a different healthy disk.
+
+## 3. GitHub Pages vs local engine
+
+GitHub Pages cannot access physical drives, Windows APIs, raw disk sectors or the local filesystem. If you visit the GitHub URL, you will see a notice explaining that the local agent is required. The **Open local recovery station** control opens `http://127.0.0.1:8765`; it only works while the Windows agent is running. The JSON parsing error from the hosted version is handled with a clear message instead of an unhelpful `Unexpected token '<'` error.
+
+Upload the contents of this folder to your repository, including the hidden `.github` directory. Hosting the interface does not host or remotely execute the local forensic engine.
+
+## 4. Engines and forensic capabilities
+
+The currently integrated core engine is **The Sleuth Kit**:
+- `mmls`: partition table discovery
+- `fls`: deleted file and directory entry enumeration
+- `icat`: inode-based file extraction
+- `fsstat`: filesystem metadata utility (detected as a required dependency)
+
+The interface also detects optional `tsk_recover`, `photorec`, and `testdisk` installations, but those optional engines are not yet wired into the recovery workflow. This release does not claim to be a full Autopsy replacement, a complete disk-imaging suite, or a universal recovery engine.
+
+## 5. Important limitations and safety
+
+- This version performs metadata-based deleted-entry discovery and inode extraction. It does not yet perform full signature carving for every file format, RAID reconstruction, encrypted-volume bypass, damaged-media repair, or comprehensive mobile-device acquisition.
+- Optical CD/DVD drives are detected and displayed, but optical-media recovery is not yet supported by this workflow.
+- A Windows system/boot disk can only be scanned after ticking the explicit read-only acknowledgement. A live scan of the running Windows disk can be incomplete or unstable; creating a forensic image first is preferable. Do not use a failing drive repeatedly.
+- Never recover files to the source disk. Use a separate healthy destination disk.
+- SSD TRIM, overwriting, encryption, fragmentation and physical damage can make recovery impossible. No software can guarantee recovery of overwritten or TRIMmed data.
+- For evidential work, preserve chain of custody, document device identifiers and acquisition times, use write blockers where appropriate, and work from a verified forensic image. This app does not currently create or verify forensic images or produce a formal court-ready chain-of-custody report.
+
+## 6. Sound asset
+
+The startup uses a short real dog-bark recording from Wikimedia Commons, released into the public domain by its creator: `George vuf 1996.ogg` by Broadbeer. The browser loads the clip from Wikimedia Commons, so an internet connection is needed for the real bark. The word-by-word credential punctuation uses a locally generated stylised impact sound.
+
+## Developer
+
+Developed by Software Developer and Cybersecurity Engineer — Tongai Godfrey Mapiye — Cyber Fortress Technologies. Copyright 2026.
 
 
-## Branded startup screen
-The app opens with the SUPER RECOVERY bulldog logo. Click **ENABLE SOUND & START** once (browsers require a user gesture before playing audio). The dog performs a 10-second sniffing animation, barks three times, then reveals the developer credit word-by-word with a short stylised cinematic gunshot-style sound effect for each word. The recovery interface opens automatically after the sequence. Sound effects are generated locally in the browser; no audio is uploaded.
+## One-click recovery and save destination
 
-Developer credit shown: **Developed by Software Developer and Cybersecurity Engineer - Tongai Godfrey Mapiye - Cyber Fortress Technologies, copyright 2026.**
+After AutoSearch finds deleted entries:
+1. Choose **Browse…** and select a folder on a different physical drive (for example `E:\Recovered`).
+2. Click **One-click recover all found files**.
+3. Confirm the operation. The local Windows agent attempts each regular deleted-file candidate in sequence and reports successful saves and failures.
+4. The selected destination folder is shown in the recovery results.
+
+The destination is checked against the source physical disk using Windows partition information. Recovery is not guaranteed: deleted entries may be overwritten, fragmented, encrypted, unsupported, or affected by SSD TRIM. For evidence preservation, image the source first and work from the image. This workflow extracts regular file entries via Sleuth Kit `icat`; it is not a complete forensic suite or a substitute for validated forensic acquisition.
