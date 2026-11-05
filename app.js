@@ -57,14 +57,75 @@ function select(n){chosen=n;const d=disks.find(x=>x.number===n);if(!d)return;con
 $('allow-system').onchange=()=>{if(chosen!==null){const d=disks.find(x=>x.number===chosen);if(d){$('scan').disabled=$('parts').disabled=(d.system||d.boot)&&!$('allow-system').checked;if($('allow-system').checked)autoSearchDevice()}}};
 async function waitScan(){for(let i=0;i<1800;i++){await new Promise(r=>setTimeout(r,1000));const s=await api('/api/scan-status');$('progress').textContent=s.message||s.status;if(s.status==='complete')return s;if(s.status==='error')throw new Error(s.message); }throw new Error('Scan timed out.');}
 async function autoSearchDevice(){
+ const mode=$('scan-mode')?.value||'quick';
+ if(mode==='raw'){await runPhotoRecRaw();return}
  try{
   found=[];render();$('progress').classList.remove('hidden');$('progress').textContent='AutoSearch: detecting partitions…';
   await api('/api/scan',{disk:chosen,listPartitions:true,allowSystem:$('allow-system').checked});const partResult=await waitScan();const partitions=partResult.partitions||[];parts(partitions);
   const targets=partitions.length?partitions:[{start:0,description:'Whole disk'}];let all=[];
   for(let i=0;i<targets.length;i++){$('progress').textContent=`AutoSearch: scanning ${i+1} of ${targets.length} partition(s)…`;await api('/api/scan',{disk:chosen,offset:targets[i].start,allowSystem:$('allow-system').checked});const result=await waitScan();all=all.concat((result.items||[]).map(item=>({...item,offset:targets[i].start})));}
-  found=all;render();$('progress').textContent=`AutoSearch complete: ${found.length} deleted file-system entries found across ${targets.length} partition(s).`;
+  found=all;render();$('progress').textContent=`Quick scan complete: ${found.length} deleted file-system entries found across ${targets.length} partition(s).`;
+  if(mode==='deep'){
+   $('progress').textContent+=' Starting PhotoRec raw recovery…';
+   await runPhotoRecRaw(true);
+  }
  }catch(e){$('progress').textContent='SCAN ERROR: '+e.message}
 }
+
+async function runPhotoRecRaw(fromDeep=false){
+ const destination=$('destination').value.trim();
+ if(!destination){
+  $('recovery-status').classList.remove('hidden');
+  $('recovery-status').textContent='Choose a recovery destination on a different physical drive before starting Raw Recovery.';
+  $('destination').focus();return;
+ }
+ if(chosen===null)return;
+ const device=disks.find(x=>x.number===chosen);
+ if(!device)return;
+ if((device.system||device.boot)&&!$('allow-system').checked){
+  $('recovery-status').classList.remove('hidden');
+  $('recovery-status').textContent='System/boot disk requires the read-only acknowledgement.';
+  return;
+ }
+ const label=fromDeep?'Deep Scan will now run PhotoRec raw recovery.':'Raw Recovery will scan the selected physical disk for known file signatures.';
+ if(!confirm(`${label}\n\nRecovered files will be written to:\n${destination}\n\nThis can take hours. Do not save anything to the source disk. Continue?`))return;
+ $('recovery-status').classList.remove('hidden');$('recovery-status').textContent='Starting PhotoRec…';
+ try{
+  await api('/api/raw-recover',{disk:chosen,destination,allowSystem:$('allow-system').checked});
+  for(let i=0;i<43200;i++){
+   await new Promise(r=>setTimeout(r,2000));
+   const state=await api('/api/scan-status');
+   $('recovery-status').textContent=state.message||state.status;
+   if(state.logTail?.length)$('recovery-status').textContent+='\\n\\n'+state.logTail.slice(-12).join('\\n');
+   if(state.status==='complete'){
+    $('recovery-status').textContent+='\\n\\nOutput folders:\\n'+(state.recoveredFolders||[]).join('\\n');
+    return;
+   }
+   if(state.status==='error')throw new Error(state.message||'PhotoRec failed');
+  }
+  throw new Error('PhotoRec is still running; check the local agent status and destination folders.');
+ }catch(e){$('recovery-status').textContent='RAW RECOVERY ERROR: '+e.message}
+}
+
+$('testdisk-analyze').onclick=async()=>{
+ if(chosen===null)return alert('Select a physical disk first.');
+ const device=disks.find(x=>x.number===chosen);
+ if((device?.system||device?.boot)&&!$('allow-system').checked)return alert('Acknowledge read-only system-disk scanning first.');
+ if(!confirm('Run TestDisk partition analysis on the selected disk? This starts a read-only search; it will not write partition changes.'))return;
+ $('recovery-status').classList.remove('hidden');$('recovery-status').textContent='Starting TestDisk…';
+ try{
+  await api('/api/testdisk-analyze',{disk:chosen,allowSystem:$('allow-system').checked});
+  for(let i=0;i<7200;i++){
+   await new Promise(r=>setTimeout(r,2000));
+   const state=await api('/api/scan-status');
+   $('recovery-status').textContent=state.message||state.status;
+   if(state.logTail?.length)$('recovery-status').textContent+='\\n\\n'+state.logTail.slice(-12).join('\\n');
+   if(state.status==='complete')return;
+   if(state.status==='error')throw new Error(state.message);
+  }
+  throw new Error('TestDisk analysis is still running; check the local agent.');
+ }catch(e){$('recovery-status').textContent='TESTDISK ERROR: '+e.message}
+};
 $('refresh').onclick=refresh;$('parts').onclick=()=>autoSearchDevice();$('scan').onclick=()=>autoSearchDevice();
 function parts(a){$('partitions').classList.remove('hidden');$('partitions').innerHTML=a.length?a.map(p=>`<div><span>${esc(p.description)} · sector ${p.start}</span><small>Included in automatic scan</small></div>`).join(''):'<div>No partition table entries returned. Whole-device scan attempted.</div>'}
 function render(){const q=$('filter').value.toLowerCase(),a=found.filter(x=>x.name.toLowerCase().includes(q));$('count').textContent=found.length;$('rows').innerHTML=a.length?a.map(x=>`<tr><td>${esc(x.name)}<small>${esc(x.raw)}</small></td><td>${esc(x.type)}</td><td>${esc(x.inode)}</td><td><input type="checkbox" class="pick" data-inode="${esc(x.inode)}"></td></tr>`).join(''):'<tr><td colspan="4">No deleted entries found in the selected partitions.</td></tr>';document.querySelectorAll('.pick').forEach(x=>x.onchange=update);updateRecoveryButtons()}

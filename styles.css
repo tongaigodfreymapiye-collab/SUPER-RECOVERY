@@ -33,3 +33,6 @@
 .save-controls button{white-space:nowrap}
 #recovery-status{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
 @media(max-width:760px){.save-controls{flex-direction:column;align-items:stretch}.save-controls input,.save-controls button{width:100%}}
+
+.controls select{display:block;width:min(100%,420px);margin-top:8px;padding:12px;background:#081523;color:#eaf5ff;border:1px solid #28445b;border-radius:7px;font:inherit}
+#testdisk-analyze{margin-top:12px}

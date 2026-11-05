@@ -8,7 +8,7 @@ STATE={"status":"idle","items":[],"message":"Select a drive."}
 COMMAND_LOG=[]
 LOG_LOCK=threading.Lock()
 TOOLS=("mmls","fls","icat","fsstat")
-OPTIONAL_TOOLS=("tsk_recover","photorec","testdisk")
+OPTIONAL_TOOLS=("tsk_recover","photorec_win.exe","photorec","testdisk_win.exe","testdisk")
 def toolmap(): return {x:shutil.which(x) for x in TOOLS}
 def optional_toolmap(): return {x:shutil.which(x) for x in OPTIONAL_TOOLS}
 def command_text(args):
@@ -126,7 +126,8 @@ class H(SimpleHTTPRequestHandler):
  def do_GET(self):
   p=urlparse(self.path).path
   if p=="/api/status":
-   t=toolmap();self.reply({"tools":t,"optionalTools":optional_toolmap(),"ready":all(t.values()),"platform":os.name,"drives":disks()})
+   t=toolmap();self.reply({"tools":t,"optionalTools":optional_toolmap(),"ready":all(t.values()),"platform":os.name,"drives":disks(),
+                "rawRecoveryAvailable":bool(shutil.which("photorec_win.exe") or shutil.which("photorec"))})
   elif p=="/api/drives":self.reply(disks())
   elif p=="/api/scan-status":self.reply(STATE)
   elif p=="/api/console":
@@ -157,6 +158,14 @@ class H(SimpleHTTPRequestHandler):
     result=recover_one(int(d["disk"]),int(d.get("offset",0)),str(d["inode"]),d.get("name","recovered-file"),d["destination"])
     return self.reply({"ok":True,**result})
    except Exception as e:return self.reply({"error":str(e)},400)
+  if p=="/api/testdisk-analyze":
+   if not LOCK.acquire(False):return self.reply({"error":"Another scan or recovery task is running"},409)
+   threading.Thread(target=self.testdisk_worker,args=(d,),daemon=True).start()
+   return self.reply({"ok":True,"engine":"TestDisk"},202)
+  if p=="/api/raw-recover":
+   if not LOCK.acquire(False):return self.reply({"error":"Another scan or recovery task is running"},409)
+   threading.Thread(target=self.raw_recovery_worker,args=(d,),daemon=True).start()
+   return self.reply({"ok":True,"engine":"PhotoRec"},202)
   if p=="/api/recover-batch":
    if not LOCK.acquire(False):return self.reply({"error":"Another scan or recovery task is running"},409)
    items=d.get("items",[])
@@ -166,6 +175,83 @@ class H(SimpleHTTPRequestHandler):
    threading.Thread(target=self.recover_batch,args=(d,),daemon=True).start()
    return self.reply({"ok":True,"total":len(items)},202)
   self.reply({"error":"Unknown endpoint"},404)
+ def testdisk_worker(self,d):
+  global STATE
+  try:
+   if os.name!="nt": raise RuntimeError("TestDisk physical-device analysis currently requires the Windows local agent.")
+   disk=int(d["disk"])
+   source=next((x for x in disks()["drives"] if x["number"]==disk),None)
+   if not source: raise RuntimeError("Selected disk is no longer connected.")
+   if (source["system"] or source["boot"]) and not d.get("allowSystem"):
+    raise RuntimeError("System/boot disk requires explicit read-only acknowledgement.")
+   exe=shutil.which("testdisk_win.exe") or shutil.which("testdisk")
+   if not exe: raise RuntimeError("TestDisk is not installed or not on PATH.")
+   device=rf"\\.\PhysicalDrive{disk}"
+   args=[exe,"/log","/cmd",device,"analyze,search"]
+   STATE={"status":"testdisk-running","message":"TestDisk is analysing the partition table and searching for lost partitions. This operation is read-only.","engine":"TestDisk"}
+   record_command(args,None,"TestDisk analysis started","")
+   proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors="replace",
+                         cwd=str(BASE),creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+   lines=[]
+   while True:
+    line=proc.stdout.readline()
+    if line:
+     lines.append(line.rstrip());lines=lines[-100:]
+     STATE={"status":"testdisk-running","message":line.strip()[:220] or "TestDisk partition analysis running.","engine":"TestDisk","logTail":lines[-30:]}
+    code=proc.poll()
+    if code is not None: break
+    time.sleep(.2)
+   tail=proc.stdout.read() if proc.stdout else ""
+   if tail: lines.extend(tail.splitlines())
+   record_command(args,code,"\\n".join(lines[-50:]),"")
+   STATE={"status":"complete" if code==0 else "error","message":"TestDisk analysis finished. Review its log; no partition table changes were made." if code==0 else f"TestDisk exited with code {code}.",
+          "engine":"TestDisk","logTail":lines[-50:],"returncode":code}
+  except Exception as e: STATE={"status":"error","message":str(e),"engine":"TestDisk"}
+  finally: LOCK.release()
+ def raw_recovery_worker(self,d):
+  global STATE
+  try:
+   if os.name!="nt": raise RuntimeError("Direct physical-device PhotoRec recovery currently requires the Windows local agent.")
+   disk=int(d["disk"]);dest=Path(d["destination"]).expanduser().resolve()
+   if not dest.is_dir(): raise ValueError("Choose an existing recovery folder.")
+   safe,reason=destination_is_separate(dest,disk)
+   if not safe: raise ValueError(reason)
+   dev=disks()["drives"]
+   source=next((x for x in dev if x["number"]==disk),None)
+   if not source: raise RuntimeError("The selected physical disk is no longer connected.")
+   if (source["system"] or source["boot"]) and not d.get("allowSystem"):
+    raise RuntimeError("System/boot disk requires explicit read-only acknowledgement.")
+   exe=shutil.which("photorec_win.exe") or shutil.which("photorec")
+   if not exe: raise RuntimeError("PhotoRec is not installed or not on PATH. Install the official TestDisk & PhotoRec Windows package and add its folder to PATH.")
+   device=rf"\\.\PhysicalDrive{disk}"
+   # PhotoRec's documented scripted interface: set destination, enable known file families, start search.
+   args=[exe,"/log","/d",str(dest),"/cmd",device,"fileopt,everything,enable,search"]
+   STATE={"status":"raw-running","message":"PhotoRec raw file-signature recovery is running. This can take hours; keep the local agent open.","engine":"PhotoRec","destination":str(dest),"recoveredFolders":[]}
+   record_command(args,None,"PhotoRec raw recovery started","")
+   creation=getattr(subprocess,"CREATE_NO_WINDOW",0)
+   proc=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,errors="replace",
+                         cwd=str(BASE),creationflags=creation)
+   output=[]
+   while True:
+    line=proc.stdout.readline()
+    if line:
+     output.append(line.rstrip())
+     if len(output)>80: output=output[-80:]
+     STATE={"status":"raw-running","message":"PhotoRec raw recovery is running. "+(line.strip()[:220] or "Scanning…"),
+            "engine":"PhotoRec","destination":str(dest),"logTail":output[-30:]}
+    code=proc.poll()
+    if code is not None: break
+    time.sleep(.2)
+   # Drain remaining output.
+   tail=proc.stdout.read() if proc.stdout else ""
+   if tail: output.extend(tail.splitlines())
+   record_command(args,code,"\\n".join(output[-40:]),"")
+   folders=sorted(str(x) for x in dest.glob("recup_dir.*") if x.is_dir())
+   STATE={"status":"complete" if code==0 else "error","message":("PhotoRec completed. Recovered files are in the recup_dir folders." if code==0 else f"PhotoRec exited with code {code}. Review its log and installation."),
+          "engine":"PhotoRec","destination":str(dest),"recoveredFolders":folders,"logTail":output[-50:],"returncode":code}
+  except Exception as e:
+   STATE={"status":"error","message":str(e),"engine":"PhotoRec","recoveredFolders":[]}
+  finally: LOCK.release()
  def recover_batch(self,d):
   global STATE
   try:
