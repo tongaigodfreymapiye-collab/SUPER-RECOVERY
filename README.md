@@ -20,3 +20,9 @@ GitHub Pages cannot access physical disk sectors. The actual recovery engine run
 
 ## Safety and limitations
 Source access is read-only; extracted files are written to the destination. System/boot disks are blocked. This is an initial TSK integration, not a complete Autopsy replacement. Recovery depends on intact filesystem metadata and TSK filesystem support. It cannot guarantee recovery of overwritten data, SSD TRIMmed blocks, fragmented files, encrypted volumes or physically damaged media. Image failing drives before repeated scans; stop if clicking/disconnecting. Keep the agent bound to 127.0.0.1; do not expose it publicly.
+
+
+## Branded startup screen
+The app opens with the SUPER RECOVERY bulldog logo. Click **ENABLE SOUND & START** once (browsers require a user gesture before playing audio). The dog performs a 10-second sniffing animation, barks three times, then reveals the developer credit word-by-word with a short stylised cinematic gunshot-style sound effect for each word. The recovery interface opens automatically after the sequence. Sound effects are generated locally in the browser; no audio is uploaded.
+
+Developer credit shown: **Developed by Software Developer and Cybersecurity Engineer - Tongai Godfrey Mapiye - Cyber Fortress Technologies, copyright 2026.**
