@@ -1,44 +1,22 @@
-# SUPER RECOVERY — Web Edition
+# SUPER RECOVERY AutoScan — Windows local recovery agent
 
-A static, GitHub Pages-ready browser application for inspecting user-selected files and disk images for a set of common file signatures. It runs locally in the browser; it does not upload selected source data to a server.
+Not an upload-only website. A local Python agent inventories physical disks and calls The Sleuth Kit (TSK) tools: `mmls`, `fls`, `icat`, `fsstat`.
 
-## Deploy to GitHub Pages
+## Requirements
+- Windows 10/11, Python 3.10+
+- Install trusted Windows binaries for The Sleuth Kit and add its `bin` folder to PATH. Verify `mmls -V`, `fls -V`, `icat -V`, `fsstat -V`.
+- Run elevated as Administrator for raw physical disk access.
 
-1. Create a new GitHub repository, for example `super-recovery`.
-2. Extract this ZIP on your computer.
-3. Upload the **contents** of this folder to the repository root (so `index.html` is at the root; do not upload only the ZIP).
-4. In GitHub, open **Settings → Pages**.
-5. Under **Build and deployment**, choose **Deploy from a branch**.
-6. Select branch `main` and folder `/ (root)`, then Save.
-7. Wait for the Pages deployment. Your site URL will appear in Settings → Pages.
+## Run
+1. Extract ZIP; install Python and TSK.
+2. Connect the target storage device.
+3. Run `Start-Super-Recovery-as-Admin.bat`.
+4. Open `http://127.0.0.1:8765`.
+5. Select a non-system disk. Click Find partitions, select a partition start sector, then Start deleted-file scan.
+6. Select deleted entries and recover to an existing folder on a different healthy drive.
 
-The included workflow at `.github/workflows/pages.yml` can also deploy the site using GitHub Actions after Pages is configured to use GitHub Actions.
+## GitHub Pages limitation
+GitHub Pages cannot access physical disk sectors. The actual recovery engine runs locally using `server.py`; this agent serves the UI on localhost to avoid exposing a local API to arbitrary websites. Static files can still be uploaded to GitHub as a product front end, but physical recovery requires the local agent.
 
-## Local preview
-
-Open `index.html` in a modern browser, or run a local static server:
-
-```bash
-python -m http.server 8000
-```
-
-Then visit `http://localhost:8000`.
-
-## Important technical scope and safety
-
-This is a **browser web app**, not a native disk recovery driver. A hosted website cannot enumerate physical drives, access raw sectors, bypass OS permissions, or recover a device that the browser cannot read. The user must explicitly select a file or disk image. Browser APIs provide read access to that selected file only.
-
-The current signature scanner recognizes selected common headers (JPEG, PNG, GIF, PDF, ZIP, GZIP, MP3, WAV, MP4/MOV, AVI, BMP, TIFF, 7z and RAR). It exports bounded byte fragments from the selected source. It does not reconstruct file-system metadata, original names/folders, fragmented files, encrypted data, or deleted SSD blocks affected by TRIM. Header matches are not proof that a complete file is recoverable; some exports may be incomplete or false positives.
-
-For a failing physical drive, stop using it and create a read-only sector image with specialist software or consult a professional recovery lab. Do not save recovered files to the source device. Do not run repair/format operations before imaging.
-
-## Project structure
-
-```text
-index.html
-styles.css
-app.js
-assets/logo.svg
-.github/workflows/pages.yml
-README.md
-```
+## Safety and limitations
+Source access is read-only; extracted files are written to the destination. System/boot disks are blocked. This is an initial TSK integration, not a complete Autopsy replacement. Recovery depends on intact filesystem metadata and TSK filesystem support. It cannot guarantee recovery of overwritten data, SSD TRIMmed blocks, fragmented files, encrypted volumes or physically damaged media. Image failing drives before repeated scans; stop if clicking/disconnecting. Keep the agent bound to 127.0.0.1; do not expose it publicly.
