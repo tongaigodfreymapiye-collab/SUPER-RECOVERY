@@ -28,7 +28,7 @@ If a command is not found, install TSK and add its `bin` directory to PATH, then
 3. Double-click `Start-Super-Recovery-as-Admin.bat` and approve the Windows UAC prompt.
 4. Keep the black command window open.
 5. The app opens at `http://127.0.0.1:8765`.
-6. Click **ENABLE SOUND & START** once. The bulldog sniffs for ten seconds, plays three real bark clips, then reveals the developer credit. The browser requires this first click to grant audio permission; browsers do not allow a website to force autoplay with sound before user interaction.
+6. The startup sequence begins automatically: the bulldog sniffs for ten seconds, attempts three bark clips, then reveals the developer credit. Browsers may block sound autoplay until the first user interaction; the visual sequence and app startup continue without a sound-enable button.
 7. The local agent checks for connected disks every five seconds. Connect or disconnect storage and the list updates automatically.
 8. Select the target disk. AutoSearch reads the partition map and scans each detected partition for deleted directory entries using TSK `fls`.
 9. Select recoverable entries and recover them to a folder on a different healthy disk.
@@ -115,3 +115,8 @@ PhotoRec's scripted mode is used for the raw-recovery engine. Its progress outpu
 - For failing media, create a forensic image first and work from the image. Do not run prolonged scans on a physically failing disk.
 - The current TestDisk integration performs partition analysis only. It does not automatically write partition repairs.
 - This is an evolving forensic recovery workstation, not yet a validated replacement for Autopsy or a certified forensic acquisition suite.
+
+
+## Animated sniffer-dog cursor
+
+On desktop devices with a mouse, the normal pointer is replaced by an animated dog that follows the mouse and continuously sniffs. Touch devices retain their normal touch interaction. The cursor is decorative and does not block clicks or keyboard navigation.

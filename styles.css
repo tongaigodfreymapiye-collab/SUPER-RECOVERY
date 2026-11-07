@@ -36,3 +36,56 @@
 
 .controls select{display:block;width:min(100%,420px);margin-top:8px;padding:12px;background:#081523;color:#eaf5ff;border:1px solid #28445b;border-radius:7px;font:inherit}
 #testdisk-analyze{margin-top:12px}
+
+
+/* Animated sniffer-dog pointer */
+@media (hover: hover) and (pointer: fine) {
+  html, body, body * { cursor: none !important; }
+  .sniffer-cursor {
+    position: fixed;
+    z-index: 999999;
+    left: 0;
+    top: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    transform: translate3d(-100px, -100px, 0);
+    transition: opacity .12s ease;
+    will-change: transform;
+  }
+  .sniffer-cursor.visible { opacity: 1; }
+  .sniffer-dog {
+    display: block;
+    font-size: 37px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,.65));
+    transform-origin: 55% 70%;
+    animation: dog-sniff .48s ease-in-out infinite;
+  }
+  .sniff-puff {
+    position: absolute;
+    right: -2px;
+    top: -1px;
+    color: #55dcff;
+    font-size: 17px;
+    font-weight: 900;
+    opacity: .85;
+    animation: scent-trail .8s ease-in-out infinite;
+  }
+}
+@keyframes dog-sniff {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); }
+  50% { transform: translateY(3px) rotate(4deg) scale(1.04); }
+}
+@keyframes scent-trail {
+  0%, 100% { opacity: .15; transform: translate(0, 2px) scale(.8); }
+  50% { opacity: 1; transform: translate(4px, -3px) scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sniffer-dog, .sniff-puff { animation: none !important; }
+}

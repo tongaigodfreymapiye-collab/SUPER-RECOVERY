@@ -2,7 +2,7 @@
 // A user gesture is required once by browsers before audio may play.
 (()=>{
  const intro=document.getElementById('intro'); if(!intro)return;
- const start=document.getElementById('enter-app'), dog=document.getElementById('intro-dog');
+ const dog=document.getElementById('intro-dog');
  const status=document.getElementById('intro-status'), progress=document.getElementById('sniff-progress');
  const credentials=document.getElementById('credentials'), hint=document.getElementById('intro-hint');
  const credit='Developed by Software Developer and Cybersecurity Engineer - Tongai Godfrey Mapiye - Cyber Fortress Technologies, copyright 2026.';
@@ -13,8 +13,8 @@
  function gunshot(){if(!audio)return;const t=audio.currentTime,osc=audio.createOscillator(),g=audio.createGain();osc.type='triangle';osc.frequency.setValueAtTime(115,t);osc.frequency.exponentialRampToValueAtTime(38,t+.13);g.gain.setValueAtTime(.32,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);osc.connect(g);g.connect(audio.destination);osc.start(t);osc.stop(t+.17);noiseBurst(audio,.12,.18,1800)}
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
  async function run(){
-  start.disabled=true;start.textContent='SNIFFING…';hint.textContent='The sniffer dog is searching for your lost data.';
-  try{audio=new(window.AudioContext||window.webkitAudioContext)();await audio.resume();}catch(e){audio=null;hint.textContent='Audio is blocked by this browser; the visual sequence will continue.'}
+  hint.textContent='The sniffer dog is searching for your lost data.';
+  try{audio=new(window.AudioContext||window.webkitAudioContext)();audio.resume().catch(()=>{});}catch(e){audio=null;hint.textContent='Audio is blocked by this browser; the visual sequence will continue.'}
   dog.classList.add('sniffing');status.textContent='SNIFFER DOG SEARCHING…';
   const begin=performance.now();while(performance.now()-begin<10000){progress.style.width=Math.min(100,(performance.now()-begin)/100)+'%';await wait(80)}
   progress.style.width='100%';dog.classList.remove('sniffing');status.textContent='TARGET DETECTED — ALERTING';
@@ -24,7 +24,9 @@
   status.textContent='RECOVERY SYSTEM READY';await wait(900);intro.classList.add('dismissed');document.body.classList.add('app-ready');
   if(typeof refresh==='function')refresh();setTimeout(()=>intro.remove(),900);
  }
- start.addEventListener('click',run,{once:true});
+ // Start the intro automatically. Browsers may block sound until a user gesture;
+ // the visual intro and application startup continue without requiring a sound button.
+ window.addEventListener('load',()=>setTimeout(()=>run(),250),{once:true});
 })();
 
 const $=x=>document.getElementById(x);let disks=[],chosen=null,found=[],pollTimer=null;
@@ -177,3 +179,22 @@ $('recover-all').onclick=async()=>{
  }catch(e){$('recovery-status').textContent='RECOVERY ERROR: '+e.message}
  finally{updateRecoveryButtons()}
 };
+
+
+// Replace the desktop mouse pointer with an animated sniffer dog.
+(()=>{
+ const cursor=document.getElementById('sniffer-cursor');
+ if(!cursor || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+ let raf=0, x=-100, y=-100;
+ document.addEventListener('pointermove', event=>{
+   x=event.clientX-18;
+   y=event.clientY-22;
+   if(!cursor.classList.contains('visible')) cursor.classList.add('visible');
+   if(!raf) raf=requestAnimationFrame(()=>{
+     cursor.style.transform=`translate3d(${x}px,${y}px,0)`;
+     raf=0;
+   });
+ }, {passive:true});
+ document.addEventListener('pointerleave', ()=>cursor.classList.remove('visible'));
+ document.addEventListener('pointerenter', ()=>cursor.classList.add('visible'));
+})();
